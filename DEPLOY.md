@@ -1,6 +1,6 @@
 # Hướng Dẫn Deploy Telegram Bot System lên VPS
 
-Hướng dẫn chi tiết để deploy hệ thống Telegram Bot (Bot, API Server, Admin Panel) lên VPS sử dụng Nginx và tmux.
+Hướng dẫn chi tiết để deploy hệ thống Telegram Bot (Bot, API Server, Admin Panel) lên VPS sử dụng Nginx và PM2.
 
 ## 📋 Yêu Cầu
 
@@ -42,10 +42,11 @@ sudo systemctl start nginx
 sudo systemctl enable nginx
 ```
 
-### 1.5. Cài đặt tmux
+### 1.5. Cài đặt PM2
 
 ```bash
-sudo apt install -y tmux
+sudo npm install -g pm2
+pm2 --version  # Kiểm tra version
 ```
 
 ## 📦 Bước 2: Upload Code lên VPS
@@ -81,7 +82,7 @@ sudo -u postgres psql
 Trong PostgreSQL console:
 ```sql
 CREATE DATABASE telegram_bot;
-CREATE USER telegram_user WITH PASSWORD 'your_secure_password';
+CREATE USER telegram_user WITH PASSWORD 'password';
 GRANT ALL PRIVILEGES ON DATABASE telegram_bot TO telegram_user;
 \q
 ```
@@ -158,7 +159,7 @@ nano .env
 ```
 
 ```env
-VITE_API_URL=http://your-domain.com/api
+VITE_API_URL=http://nhandinhbongda.io.vn/api
 # hoặc nếu dùng IP:
 # VITE_API_URL=http://your-vps-ip/api
 ```
@@ -201,58 +202,135 @@ npm run build
 
 File build sẽ được tạo trong thư mục `admin/dist`
 
-## 🚀 Bước 7: Chạy Services với tmux
+## 🚀 Bước 7: Chạy Services với PM2
 
-### 7.1. Tạo tmux session
-
-```bash
-tmux new -s telegram-bot
-```
-
-### 7.2. Chạy Bot (trong tmux)
+### 7.1. Tạo file cấu hình PM2
 
 ```bash
 cd /var/www/telegram-bot
-npm run bot
+nano ecosystem.config.js
 ```
 
-**Tách cửa sổ tmux**: `Ctrl+B` sau đó `C` (tạo cửa sổ mới)
+Thêm nội dung sau:
 
-### 7.3. Chạy API Server (trong cửa sổ tmux mới)
+```javascript
+module.exports = {
+  apps: [
+    {
+      name: 'telegram-bot',
+      script: 'src/bot/server.js',
+      cwd: '/var/www/telegram-bot',
+      instances: 1,
+      exec_mode: 'fork',
+      env: {
+        NODE_ENV: 'production'
+      },
+      error_file: './logs/bot-error.log',
+      out_file: './logs/bot-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
+      watch: false
+    },
+    {
+      name: 'telegram-api',
+      script: 'src/api/server.js',
+      cwd: '/var/www/telegram-bot',
+      instances: 1,
+      exec_mode: 'fork',
+      env: {
+        NODE_ENV: 'production'
+      },
+      error_file: './logs/api-error.log',
+      out_file: './logs/api-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
+      watch: false
+    }
+    // Uncomment nếu cần chạy listener
+    // {
+    //   name: 'telegram-listener',
+    //   script: 'src/listener/index.js',
+    //   cwd: '/var/www/telegram-bot',
+    //   instances: 1,
+    //   exec_mode: 'fork',
+    //   env: {
+    //     NODE_ENV: 'production'
+    //   },
+    //   error_file: './logs/listener-error.log',
+    //   out_file: './logs/listener-out.log',
+    //   log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    //   merge_logs: true,
+    //   autorestart: true,
+    //   max_restarts: 10,
+    //   min_uptime: '10s',
+    //   watch: false
+    // }
+  ]
+};
+```
+
+### 7.2. Tạo thư mục logs
+
+```bash
+mkdir -p /var/www/telegram-bot/logs
+```
+
+### 7.3. Khởi động tất cả services với PM2
 
 ```bash
 cd /var/www/telegram-bot
-npm run start:api
+pm2 start ecosystem.config.js
 ```
 
-**Tách cửa sổ tmux**: `Ctrl+B` sau đó `C` (tạo cửa sổ mới)
-
-### 7.4. Chạy Listener (nếu cần, trong cửa sổ tmux mới)
+### 7.4. Lưu cấu hình PM2 để tự động khởi động khi reboot
 
 ```bash
-cd /var/www/telegram-bot
-npm run start:listener
+pm2 save
+pm2 startup
+# Chạy lệnh được hiển thị (thường là sudo env PATH=...)
 ```
 
-### 7.5. Detach từ tmux
-
-Nhấn `Ctrl+B` sau đó `D` để detach (giữ session chạy)
-
-### 7.6. Reattach vào tmux session
+### 7.5. Các lệnh PM2 hữu ích
 
 ```bash
-tmux attach -t telegram-bot
+# Xem danh sách processes
+pm2 list
+
+# Xem logs
+pm2 logs                    # Tất cả logs
+pm2 logs telegram-bot       # Logs của bot
+pm2 logs telegram-api      # Logs của API
+
+# Xem thông tin chi tiết
+pm2 show telegram-bot
+pm2 show telegram-api
+
+# Restart services
+pm2 restart all             # Restart tất cả
+pm2 restart telegram-bot   # Restart bot
+pm2 restart telegram-api   # Restart API
+
+# Stop services
+pm2 stop all
+pm2 stop telegram-bot
+
+# Delete services
+pm2 delete all
+pm2 delete telegram-bot
+
+# Monitor (real-time)
+pm2 monit
+
+# Reload (zero-downtime restart)
+pm2 reload all
+pm2 reload telegram-api
 ```
-
-### 7.7. Xem danh sách cửa sổ trong tmux
-
-Trong tmux, nhấn `Ctrl+B` sau đó `W`
-
-### 7.8. Chuyển đổi giữa các cửa sổ
-
-- `Ctrl+B` + `0-9`: Chuyển đến cửa sổ số
-- `Ctrl+B` + `N`: Cửa sổ tiếp theo
-- `Ctrl+B` + `P`: Cửa sổ trước
 
 ## 🌐 Bước 8: Cấu Hình Nginx
 
@@ -262,7 +340,7 @@ Trong tmux, nhấn `Ctrl+B` sau đó `W`
 sudo nano /etc/nginx/sites-available/telegram-bot
 ```
 
-Thêm nội dung sau (thay `your-domain.com` bằng domain của bạn hoặc IP):
+Thêm nội dung sau (thay `nhandinhbongda.io.vn` bằng domain của bạn hoặc IP):
 
 ```nginx
 # API Server (Backend)
@@ -273,7 +351,7 @@ upstream api_backend {
 # Admin Panel (Frontend)
 server {
     listen 80;
-    server_name your-domain.com www.your-domain.com;
+    server_name nhandinhbongda.io.vn www.nhandinhbongda.io.vn;
     # hoặc nếu dùng IP: server_name your-vps-ip;
 
     # Admin Panel - Serve static files
@@ -310,86 +388,40 @@ sudo systemctl reload nginx
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+sudo certbot --nginx -d nhandinhbongda.io.vn -d www.nhandinhbongda.io.vn
 ```
 
 Certbot sẽ tự động cấu hình SSL và renew.
 
-## 🔄 Bước 9: Tạo Systemd Services (Tùy chọn - Thay thế tmux)
+## 🔄 Bước 9: Cấu Hình PM2 Startup (Đã được setup ở Bước 7.4)
 
-Nếu muốn chạy như systemd services thay vì tmux:
-
-### 9.1. Tạo service cho Bot
+PM2 đã được cấu hình để tự động khởi động khi reboot. Nếu chưa setup, chạy lại:
 
 ```bash
-sudo nano /etc/systemd/system/telegram-bot.service
-```
-
-```ini
-[Unit]
-Description=Telegram Bot Service
-After=network.target postgresql.service
-
-[Service]
-Type=simple
-User=your-username
-WorkingDirectory=/var/www/telegram-bot
-Environment=NODE_ENV=production
-ExecStart=/usr/bin/node src/bot/server.js
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 9.2. Tạo service cho API
-
-```bash
-sudo nano /etc/systemd/system/telegram-api.service
-```
-
-```ini
-[Unit]
-Description=Telegram Bot API Service
-After=network.target postgresql.service
-
-[Service]
-Type=simple
-User=your-username
-WorkingDirectory=/var/www/telegram-bot
-Environment=NODE_ENV=production
-ExecStart=/usr/bin/node src/api/server.js
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 9.3. Kích hoạt và chạy services
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable telegram-bot telegram-api
-sudo systemctl start telegram-bot telegram-api
-sudo systemctl status telegram-bot telegram-api
+pm2 save
+pm2 startup
+# Chạy lệnh được hiển thị
 ```
 
 ## 📝 Bước 10: Kiểm Tra và Monitoring
 
 ### 10.1. Kiểm tra logs
 
-**Nếu dùng tmux:**
+**Với PM2:**
 ```bash
-tmux attach -t telegram-bot
-# Xem logs trong các cửa sổ
-```
+# Xem tất cả logs
+pm2 logs
 
-**Nếu dùng systemd:**
-```bash
-sudo journalctl -u telegram-bot -f
-sudo journalctl -u telegram-api -f
+# Xem logs của từng service
+pm2 logs telegram-bot
+pm2 logs telegram-api
+
+# Xem logs real-time
+pm2 logs --lines 100
+
+# Xem logs từ file
+tail -f /var/www/telegram-bot/logs/bot-out.log
+tail -f /var/www/telegram-bot/logs/api-out.log
 ```
 
 ### 10.2. Kiểm tra services đang chạy
@@ -452,15 +484,17 @@ npm run build
 
 ### 12.3. Restart services
 
-**Nếu dùng tmux:**
+**Với PM2:**
 ```bash
-tmux attach -t telegram-bot
-# Dừng process (Ctrl+C) và chạy lại
-```
+# Restart tất cả
+pm2 restart all
 
-**Nếu dùng systemd:**
-```bash
-sudo systemctl restart telegram-bot telegram-api
+# Hoặc restart từng service
+pm2 restart telegram-bot
+pm2 restart telegram-api
+
+# Reload (zero-downtime) - chỉ áp dụng cho API
+pm2 reload telegram-api
 ```
 
 ## 🐛 Troubleshooting
@@ -524,7 +558,7 @@ psql -U telegram_user -d telegram_bot -h localhost
 - [Node.js Documentation](https://nodejs.org/docs/)
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 - [Nginx Documentation](https://nginx.org/en/docs/)
-- [tmux Manual](https://man.openbsd.org/tmux)
+- [PM2 Documentation](https://pm2.keymetrics.io/docs/)
 - [Let's Encrypt Documentation](https://letsencrypt.org/docs/)
 
 ## ✅ Checklist Deploy
@@ -537,7 +571,10 @@ psql -U telegram_user -d telegram_bot -h localhost
 - [ ] Database schema đã được setup
 - [ ] Admin user đã được seed
 - [ ] Admin panel đã được build
-- [ ] Services đã được chạy (tmux hoặc systemd)
+- [ ] PM2 đã được cài đặt
+- [ ] File ecosystem.config.js đã được tạo
+- [ ] Services đã được chạy với PM2
+- [ ] PM2 startup đã được cấu hình
 - [ ] Nginx đã được cấu hình
 - [ ] SSL đã được cấu hình (nếu có domain)
 - [ ] Firewall đã được cấu hình
@@ -554,5 +591,5 @@ Nếu gặp vấn đề, kiểm tra:
 
 ---
 
-**Lưu ý**: Thay thế tất cả các giá trị placeholder (your-domain.com, your-vps-ip, your-username, etc.) bằng giá trị thực tế của bạn.
+**Lưu ý**: Thay thế tất cả các giá trị placeholder (nhandinhbongda.io.vn, your-vps-ip, your-username, etc.) bằng giá trị thực tế của bạn.
 

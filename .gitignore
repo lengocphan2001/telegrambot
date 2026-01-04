@@ -1,1 +1,16 @@
 node_modules
+admin/node_modules
+
+# Logs
+logs/
+*.log
+
+# Environment variables
+.env
+admin/.env
+
+# Build files
+admin/dist/
+
+# PM2
+.pm2/
