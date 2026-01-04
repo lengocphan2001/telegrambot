@@ -208,7 +208,7 @@ File build sẽ được tạo trong thư mục `admin/dist`
 
 ```bash
 cd /var/www/telegram-bot
-nano ecosystem.config.js
+nano ecosystem.config.cjs
 ```
 
 Thêm nội dung sau:
@@ -285,7 +285,7 @@ mkdir -p /var/www/telegram-bot/logs
 
 ```bash
 cd /var/www/telegram-bot
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.cjs
 ```
 
 ### 7.4. Lưu cấu hình PM2 để tự động khởi động khi reboot
