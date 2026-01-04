@@ -1,0 +1,43 @@
+{
+  "name": "bnb-telegram-system",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+
+  "engines": {
+    "node": ">=18.0.0"
+  },
+
+  "scripts": {
+    "bot": "node src/bot/server.js",
+    "listener": "node src/listener/index.js",
+    "setup-db": "node src/setup-db.js",
+    "seed-admin": "node src/seed-admin.js",
+    "check-admin": "node src/check-admin.js",
+    "api": "node src/api/server.js",
+    "admin": "cd admin && npm run dev",
+
+    "start": "node src/bot/server.js",
+    "start:listener": "node src/listener/index.js",
+    "start:api": "node src/api/server.js",
+
+    "dev:bot": "nodemon src/bot/server.js",
+    "dev:listener": "nodemon src/listener/index.js",
+    "dev:api": "nodemon src/api/server.js"
+  },
+
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "ethers": "^6.9.0",
+    "express": "^4.19.2",
+    "node-telegram-bot-api": "^0.64.0",
+    "pg": "^8.11.3",
+    "cors": "^2.8.5",
+    "jsonwebtoken": "^9.0.2",
+    "bcrypt": "^5.1.1"
+  },
+
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  }
+}
